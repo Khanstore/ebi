@@ -6,6 +6,20 @@ import xmlrpc.client
 from odoo import models, fields
 import os,pandas as pd
 
+
+
+class ebiFields(models.TransientModel):
+    _name = 'ebi.fields'
+    _description = 'fields to import'
+
+    name = fields.Char("Name")
+    model_id = fields.Many2one('ir.model', string='Model', required=True)
+    source = fields.Char("Source")
+    target = fields.Char("target")
+
+
+
+
 class ExportDataWizard(models.TransientModel):
     _name = 'export.data.wizard'
     _description = 'Export Data with External IDs (XML-RPC)'
@@ -32,7 +46,8 @@ class ExportDataWizard(models.TransientModel):
                                    string='Backup Type')
 
     model_id = fields.Many2one('ir.model', string='Model', required=True)
-    field_ids = fields.Many2many('ir.model.fields', string='Fields', domain="[('model_id', '=', model_id)]")
+    # field_ids = fields.Many2many('ir.model.fields', string='Fields', domain="[('model_id', '=', model_id)]")
+    field_ids = fields.Many2many('ebi.fields', string='Fields', domain="[('model_id', '=', model_id)]")
 
     def direct_db_db_export(self):
         pass
@@ -75,7 +90,9 @@ class ExportDataWizard(models.TransientModel):
 
             model_name = self.model_id.model
             fields_to_export = []
-            fields_to_export.extend([field.name for field in self.field_ids])
+            fields_to_import = []
+            fields_to_export.extend([field.source for field in self.field_ids])
+            fields_to_import.extend([field.target for field in self.field_ids])
 
             # Fetch data using XML-RPC and pagination
             limit = 1000
@@ -105,28 +122,23 @@ class ExportDataWizard(models.TransientModel):
                 offset += limit
 
             # fixme here to correct the field names which is different from the source
-
+            df=pd.DataFrame.from_dict(all_source_records)
+            df=df.rename(columns={key: value for key, value in zip(fields_to_export, fields_to_import)})
+            all_source_records = df.to_dict('records')
             if self.export_type == 'direct':
                 for record in all_source_records:
                     targ = target_object.execute_kw(target_db, target_uid, target_password, model_name, 'search_read',
                                                     [[('id', '=', record['id'])]])
                     if not targ:
-                        #insert
-                        column_names = ', '.join(record.keys())
-                        values = ', '.join([f"'{value}'" for value in record.values()])
-                        print(f"({column_names})")  # Output: (id, name)
-                        print(f"({values})")
 
-                        # target_cr.execute("INSERT INTO '" + self.model_id.model.replace('.','_')  + f"({column_names})" + " VALUES " + f"({values})")
 
                         targ=target_object.execute_kw(target_db, target_uid, target_password, model_name,
                                                         'create',[record])
-                        # target_object.execute_kw(target_db, target_uid, target_password, model_name,
-                        #                          'write',[[targ['id']], record])
+                        # update ID
                         target_cr.execute("update " + self.model_id.model.replace('.','_')  +" set id="+str(record['id']) +" where id ="+str(targ))
 
                     else:
-                        # update
+                        # update record
                         targ=target_object.execute_kw(target_db, target_uid, target_password, model_name,
                                                  'write',[[targ[0]['id']], record] )
 

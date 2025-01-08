@@ -1,14 +1,3 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-eagle_base_import.access_ebi_import,access_ebi_import,eagle_base_import.model_ebi_import,base.group_user,1,1,1,1
-eagle_base_import.access_ebi_source_db_list,access_ebi_source_db_list,eagle_base_import.model_ebi_source_db_list,base.group_user,1,1,1,1
-eagle_base_import.access_ebi_dest_db_list,access_ebi_dest_db_list,eagle_base_import.model_ebi_dest_db_list,base.group_user,1,1,1,1
-eagle_base_import.access_ebi_table,access_ebi_table,eagle_base_import.model_ebi_table,base.group_user,1,1,1,1
-eagle_base_import.access_ebi_fields,access_ebi_fields,eagle_base_import.model_ebi_fields,base.group_user,1,1,1,1
-eagle_base_import.access_ebi_source_table_list,access_ebi_source_table_list,eagle_base_import.model_ebi_source_table_list,base.group_user,1,1,1,1
-eagle_base_import.access_ebi_source_field_list,access_ebi_source_field_list,eagle_base_import.model_ebi_source_field_list,base.group_user,1,1,1,1
-eagle_base_import.access_ebi_dest_field_list,access_ebi_dest_field_list,eagle_base_import.model_ebi_dest_field_list,base.group_user,1,1,1,1
-eagle_base_import.access_ebi_dest_table_list,access_ebi_dest_table_list,eagle_base_import.model_ebi_dest_table_list,base.group_user,1,1,1,1
-eagle_base_import.access_ebi_source_field,access_ebi_source_field,eagle_base_import.model_ebi_source_field,base.group_user,1,1,1,1
-eagle_base_import.access_ebi_dest_field,access_ebi_dest_field,eagle_base_import.model_ebi_dest_field,base.group_user,1,1,1,1
-eagle_base_import.access_ebi_data,access_ebi_data,eagle_base_import.model_ebi_data,base.group_user,1,1,1,1
-eagle_base_import.access_eagle_base_import_fields,access_eagle_base_import_fields,eagle_base_import.model_eagle_base_import_fields,base.group_user,1,1,1,1
+ebi.access_export_data_wizard,access_export_data_wizard,ebi.model_export_data_wizard,base.group_user,1,0,0,0
+ebi.access_ebi_fields,access_ebi_fields,ebi.model_ebi_fields,base.group_user,1,0,0,0

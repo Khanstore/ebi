@@ -1,0 +1,52 @@
+
+<odoo>
+    <data>
+    <record id="view_export_data_wizard_form" model="ir.ui.view">
+    <field name="name">Export Data Wizard (XML-RPC)</field>
+    <field name="model">export.data.wizard</field>
+    <field name="arch" type="xml">
+        <form>
+            <sheet>
+                <group>
+                    <group>
+                        <field name="source_address"/>
+                        <field name="source_database"/>
+                        <field name="source_email"/>
+                        <field name="source_uid" />
+                        <field name="source_pass" password="True"/>
+                    </group>
+                    <group>
+                        <field name="target_address"/>
+                        <field name="target_database"/>
+                        <field name="target_email"/>
+                        <field name="target_uid" />
+                        <field name="target_pass" password="True"/>
+                    </group>
+                </group>
+                <group>
+                    <group>
+                        <field name="postgre_uid"/>
+                        <field name="postgre_pass"/>
+                        <field name="model_id"/>
+                        <field name="field_ids" widget="many2many_tags" domain="[('model_id', '=', model_id)]"/>
+
+                    </group>
+
+                    <group>
+                        <field name="export_type" />
+                        <field name="server_path" />
+                        <button name="direct_db_db_export" string="Direct export Db2DB" type="object" class="btn-primary"/>
+                        <button name="fetch_data_with_external_ids" string="fetch_data_with_external_ids" type="object" class="btn-primary"/>
+                        <button name="test_source_connection" string="test_source_connection" type="object" class="btn-primary"/>
+                        <button name="export_data" string="Export" type="object" class="btn-primary"/>
+                        <button string="Cancel" class="btn-secondary" special="cancel"/>
+                    </group>
+                </group>
+            </sheet>
+            <footer>
+            </footer>
+        </form>
+    </field>
+</record>
+    </data>
+</odoo>

@@ -1,3 +1,4 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-ebi.access_export_data_wizard,access_export_data_wizard,ebi.model_export_data_wizard,base.group_user,1,0,0,0
 ebi.access_ebi_fields,access_ebi_fields,ebi.model_ebi_fields,base.group_user,1,0,0,0
+ebi.access_ebi_database,access_ebi_database,ebi.model_ebi_database,base.group_user,1,0,0,0
+ebi.access_ebi_model,access_ebi_model,ebi.model_ebi_model,base.group_user,1,0,0,0

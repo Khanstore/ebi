@@ -45,6 +45,7 @@
                                 <group>
                                     <field name="model_ids">
                                         <tree>
+                                            <field name="selected" />
                                             <field name="sequence" widget="handle"/>
                                             <field name="name"/>
                                             <field name="database_id"/>
@@ -99,6 +100,7 @@
                 <tree>
                     <field name="sequence" widget="handle"/>
                     <field name="name" />
+                    <field name="selected" />
                     <field name="model_id" />
                     <field name="source" />
                     <field name="target" />

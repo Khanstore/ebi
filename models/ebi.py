@@ -7,6 +7,7 @@ import xmlrpc.client
 from odoo import models, fields
 import os,pandas as pd
 import json
+import numpy as np
 
 
 
@@ -15,23 +16,25 @@ class ebiFields(models.Model):
     _description = 'fields to import'
 
     name = fields.Char("Name")
+    selected = fields.Boolean("Update?")
     sequence = fields.Integer("Sequence" ,default=10)
     model_id = fields.Many2one('ebi.model', string='Model', required=True)
     source = fields.Char("Source")
-    target = fields.Char("target")
+    target = fields.Char("Target")
+    data_type = fields.Char("Data Type")
     default_value=fields.Char('DefaultValue')
 
 class ebiModel(models.Model):
     _name = 'ebi.model'
     _description = 'Models to import'
+    selected=fields.Boolean("Update?")
     sequence=fields.Integer("Sequence" ,default=10)
     name = fields.Char("Name")
     database_id = fields.Many2one('ebi.database', string='database', required=True)
     source = fields.Char("Source")
     target = fields.Char("target")
-    data_type = fields.Char("Data Type")
     # fixme apply this domain, domain="[('model_id', '=', model_id)]")
-    field_ids = fields.Many2many('ebi.fields', string='Fields')
+    field_ids = fields.One2many('ebi.fields','model_id', string='Fields')
 
 
 
@@ -140,48 +143,65 @@ class ExportDataWizard(models.Model):
         target_cur = target_conn.cursor()
 
         for model in self.model_ids:
-            # fixme create logic for different source and target table name
-            source_table=model.source.replace(".",'_')
-            target_table=model.target.replace(".",'_')
-            # fixme get list of source fields here
-            source_fields = [field.source for field in model.field_ids if field.source]
-            target_fields = [field.target for field in model.field_ids if field.source]
+            if model.selected:
+                source_table = model.source.replace(".", '_')
+                target_table = model.target.replace(".", '_')
 
-            source_cur.execute(f"SELECT {','.join(source_fields)} FROM {source_table}")
-            source_res=source_cur.fetchall()
+                source_fields = [field.source for field in model.field_ids if field.source]
+                target_fields = [field.target for field in model.field_ids if field.source]
 
-            df = pd.DataFrame.from_dict(source_res)
-            #since sourece res doesnt contain column name
-            # following line adds collumn names
-            df = df.rename(columns={index: value for index, value in enumerate(target_fields)})
+                source_cur.execute(f"SELECT {','.join(source_fields)} FROM {source_table}")
+                source_res = source_cur.fetchall()
 
-            #format json type data
-            target_cur.execute(f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{target_table}';")
-            data_type=target_cur.fetchall()
-            for line in data_type:
-                if line[1]=="jsonb": # line(1) is data_type
-                    if line[0] in target_fields:
-                        df[line[0]] = df[line[0]].apply(json.dumps)
-            # fixme here to insert the required fields default values to dataframe and frmat json fields
-            fields_to_add=[field.target for field in model.field_ids if not field.source]
-            value_to_add=[field.default_value for field in model.field_ids if not field.source]
-            number_of_fields=len(target_fields)+len(fields_to_add)
-            target_fields=target_fields+fields_to_add
-            index=0
-            for line in fields_to_add:
-                df[line]=value_to_add[index]
-                index=index+1
+                df = pd.DataFrame.from_dict(source_res)
+                df = df.rename(columns={index: value for index, value in enumerate(target_fields)})
 
-            data = [tuple(row) for row in df.itertuples(index=False)]
-
-            for rec in data:
                 target_cur.execute(
-                f"INSERT INTO {target_table} ({','.join(target_fields)}) VALUES ({', '.join(['%s'] * number_of_fields)})",  rec)
-        target_conn.commit()
+                    f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{target_table}';"
+                )
+                data_type = target_cur.fetchall()
 
+                for line in data_type:
+                    if line[1] == "jsonb" and line[0] in target_fields:
+                        df[line[0]] = df[line[0]].apply(json.dumps)
+                    elif line[1] == "integer" and line[0] in target_fields:
+                        df[line[0]] = df[line[0]].apply(
+                            lambda x: int(x) if pd.notnull(x) else None
+                        ).astype(pd.Int64Dtype())
 
+                fields_to_add = [field.target for field in model.field_ids if not field.source]
+                value_to_add = [field.default_value for field in model.field_ids if not field.source]
+                target_fields += fields_to_add
 
+                for index, line in enumerate(fields_to_add):
+                    df[line] = value_to_add[index]
 
+                data = [
+                    tuple(None if pd.isna(value) else value.item() if isinstance(value,
+                                                                                 (np.integer, np.floating)) else value
+                          for value in row)
+                    for row in df.itertuples(index=False)
+                ]
+
+                target_cur.execute(f"SELECT id FROM {target_table};")
+                existing_rec = target_cur.fetchall()
+                existing_ids = [item[0] for item in existing_rec]
+
+                for rec in data:
+                    rec_id = rec[target_fields.index("id")]
+                    update_str = ', '.join([f"{key} = %s" for key in target_fields])
+
+                    if rec_id in existing_ids:
+                        target_cur.execute(
+                            f"UPDATE {target_table} SET {update_str} WHERE id=%s", (*rec, rec_id)
+                        )
+                    else:
+                        placeholders = ', '.join(['%s'] * len(target_fields))
+                        target_cur.execute(
+                            f"INSERT INTO {target_table} ({', '.join(target_fields)}) VALUES ({placeholders})", rec
+                        )
+
+                target_conn.commit()
 
     def export_data(self):
         # IRMD for ir.model.data

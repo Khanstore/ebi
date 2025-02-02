@@ -8,6 +8,11 @@ from odoo import models, fields
 import os,pandas as pd
 import json
 import numpy as np
+import logging
+from contextlib import suppress
+
+
+_logger = logging.getLogger(__name__)
 
 
 
@@ -16,33 +21,89 @@ class ebiFields(models.Model):
     _description = 'fields to import'
 
     name = fields.Char("Name")
-    selected = fields.Boolean("Update?")
+    selected = fields.Boolean("Update?",default='True')
     sequence = fields.Integer("Sequence" ,default=10)
     model_id = fields.Many2one('ebi.model', string='Model', required=True)
     source = fields.Char("Source")
     target = fields.Char("Target")
     data_type = fields.Char("Data Type")
     default_value=fields.Char('DefaultValue')
+    # _sql_constraints = [("model_field_unique", "unique(name,model_id)", "field name per model must be unique!")]
+
 
 class ebiModel(models.Model):
     _name = 'ebi.model'
     _description = 'Models to import'
-    selected=fields.Boolean("Update?")
-    sequence=fields.Integer("Sequence" ,default=10)
+
     name = fields.Char("Name")
+    instruction=fields.Char("Instruction")
+    no_id=fields.Boolean("ID present?")
+    selected=fields.Boolean("Update?" ,default='True')
+    sequence=fields.Integer("Sequence" ,default=10)
     database_id = fields.Many2one('ebi.database', string='database', required=True)
     source = fields.Char("Source")
     target = fields.Char("target")
     # fixme apply this domain, domain="[('model_id', '=', model_id)]")
     field_ids = fields.One2many('ebi.fields','model_id', string='Fields')
+    # _sql_constraints = [("db_model_unique", "unique(name,db_id)", "model name per database be unique!")]
+
+    def update_field_list(self):
+        source_conn = self.database_id.create_connection("source")
+        target_conn = self.database_id.create_connection("Target")
+        source_cur = source_conn.cursor()
+        target_cur = target_conn.cursor()
+        target_cur.execute(
+            f"SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_name = '{self.source.replace('.', '_')}';")
+        source_cur.execute(
+            f"SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_name = '{self.target.replace('.', '_')}';")
+        source_fields = source_cur.fetchall()
+
+        source_field_list = []
+        for rec in source_fields:
+            source_field_list.append(rec[0])
 
 
+        target_fields = target_cur.fetchall()
+        target_field_list = []
+        for rec in target_fields:
+            target_field_list.append(rec[0])
+        common_fields = source_fields and target_fields
+        existing_fields = list(rec.target for rec in self.field_ids)
+        existing_fields = [field for field in existing_fields]
+        fields2Insert = [field for field in target_fields if field[0] not in existing_fields]
+        index = 1
+        for field in fields2Insert:
+
+            if field[0] in source_field_list:
+                source=field[0]
+            else:
+                source="ebi_none_"+str(index)
+                index=index+1
 
 
-class ExportDataWizard(models.Model):
+            if not field[2] == "YES":
+                selected = True
+            else:
+                selected = False
+            vals = {"name": field[0],
+                    "source": source,
+                    "target": field[0],
+                    "selected": selected,
+                    "data_type": field[1],
+                    "model_id": self.id
+                    }
+            self.env['ebi.fields'].create(vals
+                                          )
+
+    def import_table_data(self):
+        self.database_id.import_model_data(self.id)
+
+
+class ExportDatabase(models.Model):
     _name = 'ebi.database'
     _description = 'Export Data with External IDs (XML-RPC)'
 
+    name = fields.Char("Name")
     source_address = fields.Char(string="Source Address", required=True, default="http://localhost:8069")
     source_database = fields.Char(string="Source Database", required=True)
     source_email = fields.Char(string="User Eamil", required=True)
@@ -65,6 +126,137 @@ class ExportDataWizard(models.Model):
     target_pg_pass = fields.Char(string="Postgree Password", required=True)
     target_pg_host=fields.Char("Host")
 
+    def update_khan_store_bd_state(self):
+        target_conn = self.create_connection("Target")
+        target_cur = target_conn.cursor()
+        target_cur.execute("DELETE FROM public.res_country_state    WHERE id =1461;")
+        target_cur.execute("DELETE FROM public.ir_model_data WHERE id IN (20995);")
+        target_cur.execute("UPDATE public.res_partner SET state_id = '1476'::integer WHERE state_id = 1455;")
+        target_cur.execute("DELETE FROM public.res_country_state WHERE id IN (1455);")
+        target_cur.execute("DELETE FROM public.ir_model_data WHERE id IN (20989);")
+        target_cur.execute("UPDATE public.ir_model_data SET name = 'state_bd_chapai'::character varying WHERE id = 1941774;")
+        target_cur.execute("UPDATE public.ir_config_parameter SET value = '2045-02-18 11:58:37'::text WHERE key = 'database.expiration_date';")
+        target_cur.execute("UPDATE ir_model_data SET name = replace(name, 'bd_', 'state_bd_'),module='__export__' WHERE model='res.country.state' and name ILIKE 'bd_%'  and res_id>1410 and res_id< 1477;")
+
+        target_conn.commit()
+
+    def delete_previous_product_data(self):
+        target_conn = self.create_connection("Target")
+        target_cur = target_conn.cursor()
+        sql_statements = [
+            "DELETE FROM public.sale_order_template_option",
+            "DELETE FROM public.loyalty_reward",
+            "DELETE FROM public.sale_order_template_line",
+            "DELETE FROM public.product_wishlist",
+            "DELETE FROM public.mrp_bom_line",
+            "DELETE FROM public.delivery_carrier",
+            "DELETE FROM public.product_product",
+            "DELETE FROM public.product_template",
+            "DELETE FROM public.product_attribute_value",
+            "DELETE FROM public.product_attribute",
+            "DELETE FROM public.product_category",
+        ]
+
+        # Execute each SQL statement
+        for statement in sql_statements:
+            try:
+                target_cur.execute(statement)
+                print(f"Executed: {statement}")
+                target_conn.commit()
+            except Exception as e:
+                target_conn.close()
+                target_conn = self.create_connection("Target")
+                target_cur = target_conn.cursor()
+                print(f"An error occurred while executing: {statement}\nError: {e}")
+                # Optionally, log the error to a file or logging system
+                # logging.error(f"An error occurred while executing: {statement}\nError: {e}")
+
+    def delete_previous_data(self):
+
+        target_conn = self.create_connection("Target")
+        target_cur = target_conn.cursor()
+        sql_statements = [
+            "DELETE FROM public.account_bank_statement_line",
+            "ALTER SEQUENCE account_bank_statement_line_id_seq RESTART WITH 1",
+            "DELETE FROM public.account_batch_payment",
+            "ALTER SEQUENCE account_batch_payment_id_seq RESTART WITH 1",
+            "DELETE FROM public.account_fiscal_position_tax",
+            "ALTER SEQUENCE account_fiscal_position_tax_id_seq RESTART WITH 1",
+            "DELETE FROM public.account_fiscal_position_tax_template",
+            "ALTER SEQUENCE account_fiscal_position_tax_template_id_seq RESTART WITH 1",
+            "DELETE FROM public.account_partial_reconcile",
+            "ALTER SEQUENCE account_partial_reconcile_id_seq RESTART WITH 1",
+            "DELETE FROM public.account_move",
+            "ALTER SEQUENCE account_move_id_seq RESTART WITH 1",
+            "DELETE FROM public.mail_message",
+            "ALTER SEQUENCE mail_message_id_seq RESTART WITH 1",
+            "DELETE FROM public.mrp_production",
+            "ALTER SEQUENCE mrp_production_id_seq RESTART WITH 1",
+            "DELETE FROM public.payment_transaction",
+            "ALTER SEQUENCE payment_transaction_id_seq RESTART WITH 1",
+            "DELETE FROM public.pos_order_line",
+            "ALTER SEQUENCE pos_order_line_id_seq RESTART WITH 1",
+            "DELETE FROM public.pos_payment",
+            "ALTER SEQUENCE pos_payment_id_seq RESTART WITH 1",
+            "DELETE FROM public.pos_order",
+            "ALTER SEQUENCE pos_order_id_seq RESTART WITH 1",
+            "DELETE FROM public.pos_session",
+            "ALTER SEQUENCE pos_session_id_seq RESTART WITH 1",
+            "DELETE FROM public.purchase_order",
+            "ALTER SEQUENCE purchase_order_id_seq RESTART WITH 1",
+            "DELETE FROM public.sale_order",
+            "ALTER SEQUENCE sale_order_id_seq RESTART WITH 1",
+            "DELETE FROM public.stock_move",
+            "ALTER SEQUENCE stock_move_id_seq RESTART WITH 1",
+            "DELETE FROM public.stock_picking",
+            "ALTER SEQUENCE stock_picking_id_seq RESTART WITH 1",
+            "DELETE FROM public.stock_quant",
+            "ALTER SEQUENCE stock_quant_id_seq RESTART WITH 1",
+            "DELETE FROM public.stock_valuation_layer",
+            "ALTER SEQUENCE stock_valuation_layer_id_seq RESTART WITH 1",
+            "DELETE FROM public.account_account_template",
+            "ALTER SEQUENCE account_account_template_id_seq RESTART WITH 1",
+            "DELETE FROM public.account_account_account_tag",
+            "DELETE FROM public.account_account_tag_account_tax_repartition_line_rel",
+            "DELETE FROM public.account_account_tag",
+            "ALTER SEQUENCE account_account_tag_id_seq RESTART WITH 1",
+            "DELETE FROM public.mail_followers",
+            "ALTER SEQUENCE mail_followers_id_seq RESTART WITH 1",
+            "UPDATE public.ir_sequence SET number_next=1 WHERE name='Sales Order'",
+            # Delete attachments
+            "DELETE FROM public.ir_attachment WHERE res_model IN ('account.move','sale.order')"
+        ]
+
+        # Execute each SQL statement
+        for statement in sql_statements:
+            try:
+                target_cur.execute(statement)
+                print(f"Executed: {statement}")
+                target_conn.commit()
+            except Exception as e:
+                target_conn.close()
+                target_conn = self.create_connection("Target")
+                target_cur = target_conn.cursor()
+                print(f"An error occurred while executing: {statement}\nError: {e}")
+                # Optionally, log the error to a file or logging system
+                # logging.error(f"An error occurred while executing: {statement}\nError: {e}")
+
+    def update_table_list(self):
+        source_conn = self.create_connection("source")
+        target_conn = self.create_connection("Target")
+        source_cur = source_conn.cursor()
+        target_cur = target_conn.cursor()
+        target_cur.execute("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema';")
+        source_cur.execute("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema';")
+        source_tables=source_cur.fetchall()
+        target_tables=target_cur.fetchall()
+        common_tables=source_tables and target_tables
+        existing_tables=list(rec.source.replace('.','_') for rec in self.model_ids)
+        existing_tables = [(table,) for table in existing_tables]
+        table2Insert = [table for table in common_tables if table not in existing_tables]
+        for table in table2Insert:
+            self.env['ebi.model'].create({"name":table[0],"source":table[0],"target":table[0],"selected":False,"database_id":self.id})
+
 
     def get_default_downloads_path(self):
         """
@@ -84,7 +276,7 @@ class ExportDataWizard(models.Model):
                                     ('server', 'Export')],
                                    string='Backup Type')
 
-    model_ids = fields.Many2many('ebi.model','ebi_database_model_rel','database_id','model_ids', string='Model')
+    model_ids = fields.One2many('ebi.model','database_id', string='Model')
     # field_ids = fields.Many2many('ir.model.fields', string='Fields', domain="[('model_id', '=', model_id)]")
     # field_ids = fields.Many2many('ebi.fields', string='Fields', domain="[('model_id', '=', model_id)]")
 
@@ -92,6 +284,7 @@ class ExportDataWizard(models.Model):
 
     def direct_db_db_export(self):
         pass
+
     def test_source_connection(self):
         try:
             source_common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(self.source_address))
@@ -99,7 +292,7 @@ class ExportDataWizard(models.Model):
             message=e
         else:
             try:
-                user_id = source_common.authenticate(self.source_database, self.source_username, self.source_pass, {})
+                user_id = source_common.authenticate(self.source_database, self.source_email, self.source_pass, {})
             except errno:
                 message = "please Check address or Port"
             else:
@@ -109,12 +302,22 @@ class ExportDataWizard(models.Model):
                 else:message="Please check user_name or Password"
         self.source_connection=message
 
+    def update_image_url(self):
+        source_conn = self.create_connection("source")
+        target_conn = self.create_connection("Target")
+        source_cur = source_conn.cursor()
+        target_cur = target_conn.cursor()
+        target_cur.execute("SELECT id FROM product_product;")
+        records = target_cur.fetchall()
+        for rec in records:
+            print(rec[0])
+            target_cur.execute(f"update product_product set image_url=https://www.khan-store.com/web/image/product.product/{rec[0]}/image_1920 where id={rec[0]}")
+        target_conn.commit()
+
     def export_csv(self):
         model_name = self.model_id.model
 
-    import xmlrpc.client
-    import psycopg2
-    import pandas as pd
+
     def create_connection(self,db_type):
         if db_type=="source":
             database=self.source_database
@@ -136,72 +339,116 @@ class ExportDataWizard(models.Model):
             port=port)
         return conn
 
-    def export_jsondata(self):
-        source_conn = self.create_connection("source")
-        target_conn = self.create_connection("Target")
-        source_cur = source_conn.cursor()
-        target_cur = target_conn.cursor()
+    def reset_external_id(self, source_model_name,target_model_name,source_cursor,target_cursor,target_connection):
+        target_cursor.execute(f"delete from ir_model_data where model='{target_model_name.replace('_','.')}'")
+        target_connection.commit()
+        target_fields= ['res_id', 'module', 'model', 'name', 'noupdate']
+        source_cursor.execute(f"select {', '.join(target_fields)} from ir_model_data where model='{source_model_name.replace('_','.')}'")
+        source_ids=source_cursor.fetchall()
+        placeholders = ', '.join(['%s'] * len(target_fields))
+        for rec in source_ids:
+            target_cursor.execute(
+                f"INSERT INTO ir_model_data ({', '.join(target_fields)}) VALUES ({placeholders})", rec
+            )
+        target_connection.commit()
 
+    def import_model_data(self, model_id):
+        """
+        This function imports data from a source database table to a target table based on an Odoo model configuration.
+        It handles:
+        - Fetching source data
+        - Mapping fields (including default values)
+        - Handling data types (JSON, integer, etc.)
+        - Upserting data into the target database
+        - Resetting sequences for auto-increment fields
+        """
+
+        # Fetch the Odoo model based on the provided model_id
+        model = self.env['ebi.model'].search([('id', '=', model_id)])
+
+        # Using "with" ensures that connections close automatically when done.
+        with self.create_connection("source") as source_conn, self.create_connection("Target") as target_conn:
+            with source_conn.cursor() as source_cur, target_conn.cursor() as target_cur:
+                try:
+                    # Prepare table names by replacing dots with underscores
+                    source_table = model.source.replace(".", '_')
+                    target_table = model.target.replace(".", '_')
+
+                    # Extract source and target field mappings based on user selection in the model
+                    source_fields = [field.source for field in model.field_ids if field.source and field.selected]
+                    target_fields = [field.target for field in model.field_ids if field.source and field.selected]
+
+                    # Handling default values for fields with 'ebi_none' placeholder
+                    for rec in source_fields:
+                        if 'ebi_none' in rec:
+                            idx = source_fields.index(rec)
+                            default_value = [field.default_value for field in model.field_ids if
+                                             field.source == rec and field.selected]
+                            # Assigning the default value as a constant SQL expression
+                            field_name = f"'{default_value[0]}' AS {target_fields[idx]}"
+                            source_fields[idx] = field_name  # Replace 'ebi_none' with actual default value
+
+                    source_cur.execute(f"SELECT {','.join(source_fields)} FROM {source_table}")
+                    source_res = source_cur.fetchall()
+
+                    # Convert the fetched data into a Pandas DataFrame for easy manipulation
+                    df = pd.DataFrame(source_res, columns=target_fields)
+
+                    # Retrieve column data types from the target table to ensure proper type conversion
+                    target_cur.execute(
+                        f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{target_table}';")
+                    data_type = dict(target_cur.fetchall())
+
+                    # Convert data types accordingly (important for database constraints)
+                    for col, dtype in data_type.items():
+                        if col in df.columns:
+                            if dtype == "jsonb":
+                                df[col] = df[col].apply(json.dumps)  # Convert Python objects to JSON strings
+                            elif dtype == "integer":
+                                # Convert NaN to None for PostgreSQL
+                                df[col] = df[col].apply(lambda x: int(x) if pd.notnull(x) else None)
+
+                    # Convert DataFrame to list of tuples while ensuring None for NaN values
+                    data_with_null = [
+                        tuple(None if pd.isna(value) else value for value in row)
+                        for row in df.itertuples(index=False, name=None)
+                    ]
+
+                    # Using executemany() to perform bulk insertions
+                    placeholders = ', '.join(['%s'] * len(target_fields))
+                    if 'id' in target_fields:
+                        query = f"""
+                            INSERT INTO {target_table} ({', '.join(target_fields)}) 
+                            VALUES ({placeholders}) 
+                            ON CONFLICT (id) DO UPDATE SET 
+                            {', '.join([f"{key} = EXCLUDED.{key}" for key in target_fields])}
+                        """
+                    else:query = f"""
+                            INSERT INTO {target_table} ({', '.join(target_fields)}) 
+                            VALUES ({placeholders}) 
+                        """
+                    target_cur.executemany(query, data_with_null)
+
+                    # # Reset sequence for auto-increment primary keys
+                    # target_cur.execute(
+                    #     f"SELECT setval(pg_get_serial_sequence('{target_table}', 'id'), "
+                    #     f"COALESCE((SELECT MAX(id) FROM {target_table}), 1, FALSE));"
+                    # )
+
+                    # Commit the transaction
+                    target_conn.commit()
+
+                except Exception as e:
+                    # If any error occurs, rollback the transaction to avoid partial inserts
+                    target_conn.rollback()
+                    _logger.error(f"Error during import: {e}")
+
+    def export_jsondata(self):
         for model in self.model_ids:
             if model.selected:
-                source_table = model.source.replace(".", '_')
-                target_table = model.target.replace(".", '_')
+                self.import_model_data(model.id)
 
-                source_fields = [field.source for field in model.field_ids if field.source]
-                target_fields = [field.target for field in model.field_ids if field.source]
 
-                source_cur.execute(f"SELECT {','.join(source_fields)} FROM {source_table}")
-                source_res = source_cur.fetchall()
-
-                df = pd.DataFrame.from_dict(source_res)
-                df = df.rename(columns={index: value for index, value in enumerate(target_fields)})
-
-                target_cur.execute(
-                    f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{target_table}';"
-                )
-                data_type = target_cur.fetchall()
-
-                for line in data_type:
-                    if line[1] == "jsonb" and line[0] in target_fields:
-                        df[line[0]] = df[line[0]].apply(json.dumps)
-                    elif line[1] == "integer" and line[0] in target_fields:
-                        df[line[0]] = df[line[0]].apply(
-                            lambda x: int(x) if pd.notnull(x) else None
-                        ).astype(pd.Int64Dtype())
-
-                fields_to_add = [field.target for field in model.field_ids if not field.source]
-                value_to_add = [field.default_value for field in model.field_ids if not field.source]
-                target_fields += fields_to_add
-
-                for index, line in enumerate(fields_to_add):
-                    df[line] = value_to_add[index]
-
-                data = [
-                    tuple(None if pd.isna(value) else value.item() if isinstance(value,
-                                                                                 (np.integer, np.floating)) else value
-                          for value in row)
-                    for row in df.itertuples(index=False)
-                ]
-
-                target_cur.execute(f"SELECT id FROM {target_table};")
-                existing_rec = target_cur.fetchall()
-                existing_ids = [item[0] for item in existing_rec]
-
-                for rec in data:
-                    rec_id = rec[target_fields.index("id")]
-                    update_str = ', '.join([f"{key} = %s" for key in target_fields])
-
-                    if rec_id in existing_ids:
-                        target_cur.execute(
-                            f"UPDATE {target_table} SET {update_str} WHERE id=%s", (*rec, rec_id)
-                        )
-                    else:
-                        placeholders = ', '.join(['%s'] * len(target_fields))
-                        target_cur.execute(
-                            f"INSERT INTO {target_table} ({', '.join(target_fields)}) VALUES ({placeholders})", rec
-                        )
-
-                target_conn.commit()
 
     def export_data(self):
         # IRMD for ir.model.data

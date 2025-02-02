@@ -6,6 +6,7 @@
             <field name="arch" type="xml">
                 <form>
                     <sheet>
+                        <field name="name"/>
                         <notebook>
                             <page string="Database Credentials">
                                 <group>
@@ -23,6 +24,9 @@
                                         <field name="target_uid"/>
                                         <field name="target_pass" password="True"/>
                                     </group>
+                                    <button name="update_khan_store_bd_state" class="btn-primary" string="update_khan_store_bd_state" type="object"/>
+                                    <button name="delete_previous_data" class="btn-primary" string="delete_previous_data" type="object"/>
+                                    <button name="delete_previous_product_data" class="btn-primary" string="delete_product_data" type="object"/>
                                 </group>
                             </page>
                             <page string="Postgre Sql Credentials">
@@ -39,19 +43,23 @@
                                         <field name="target_pg_user"/>
                                         <field name="target_pg_pass" password="True"/>
                                     </group>
+                                    <button type="object" name="update_table_list" string="update_table_list" class="btn-primary"/>
                                 </group>
                             </page>
                             <page string="Tables">
                                 <group>
-                                    <field name="model_ids">
-                                        <tree>
+                                    <field name="model_ids" >
+                                        <tree >
                                             <field name="selected" />
                                             <field name="sequence" widget="handle"/>
+                                            <field name="sequence" />
+                                            <field name="no_id"/>
                                             <field name="name"/>
                                             <field name="database_id"/>
                                             <field name="source"/>
                                             <field name="target"/>
-                                            <field name="field_ids" widget="many2many_tags"/>
+                                            <button name="import_table_data" type="object" string="import_table_data" class="btn-primary"/>
+<!--                                            <field name="field_ids" widget="many2many_tags"/>-->
 
                                         </tree>
                                     </field>
@@ -106,6 +114,72 @@
                     <field name="target" />
                     <field name="default_value" />
                     <field name="data_type" />
+                </tree>
+            </field>
+        </record>
+         <record id="view_ebi_database_tree" model="ir.ui.view">
+            <field name="name">EBI Data Wizard (XML-RPC)</field>
+            <field name="model">ebi.database</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="source_database"/>
+                    <field name="target_database"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="ebi_model_form" model='ir.ui.view'>
+            <field name="name">ebi.model.form</field>
+            <field name="model">ebi.model</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <group>
+                                <field name="sequence" />
+                                <field name="name" />
+                                <field name="selected" />
+                                <field name="no_id" />
+                                <field name="database_id" />
+                                <field name="source" />
+                                <field name="target" />
+                            </group>
+                            <group>
+
+                                <button name="update_field_list" string="update_field_list" type="object" class="btn-primary"/>
+                            </group>
+
+                        </group>
+                        <group>
+                                <field name="field_ids" >
+                                    <tree editable="top">
+                                        <field name="selected"/>
+                                        <field name="model_id"/>
+                                        <field name="name"/>
+                                        <field name="source"/>
+                                        <field name="target"/>
+                                        <field name="default_value"/>
+                                        <field name="data_type"/>
+                                    </tree>
+                                </field>
+                            </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+        <record id="ebi_model_tree" model='ir.ui.view'>
+            <field name="name">ebi.model.tree</field>
+            <field name="model">ebi.model</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="sequence" widget="handle"/>
+                    <field name="name" />
+                    <field name="selected" />
+                    <field name="database_id" />
+                    <field name="source" />
+                    <field name="target" />
+                    <field name="field_ids" />
                 </tree>
             </field>
         </record>

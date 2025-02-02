@@ -1,0 +1,20 @@
+
+<odoo>
+    <data>
+       <record id="ebi_database_action" model="ir.actions.act_window">
+            <field name="name">Import Database</field>
+            <field name="res_model">ebi.database</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+       <record id="ebi_model_action" model="ir.actions.act_window">
+            <field name="name">Import models</field>
+            <field name="res_model">ebi.model</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+       <record id="ebi_field_action" model="ir.actions.act_window">
+            <field name="name">Import field</field>
+            <field name="res_model">ebi.fields</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,32 @@
+
+<odoo>
+
+    <menuitem id="ebi_main_menu"
+                  name="Import Data"
+                  web_icon="ebi,static/description/icon.jpg"
+        />
+
+        <menuitem id="ebi_menu"
+                  name="Import"
+                  parent="ebi_main_menu"
+                  sequence="0"
+                  groups="base.group_system"/>
+    <menuitem id="ebi_database_menu"
+                  name="Database"
+                  parent="ebi_menu"
+                  sequence="0"
+                action="ebi.ebi_database_action"
+                  groups="base.group_system"/>
+    <menuitem id="ebi_model_menu"
+                  name="Models"
+                  parent="ebi_menu"
+                  sequence="0"
+                action="ebi.ebi_model_action"
+                  groups="base.group_system"/>
+    <menuitem id="ebi_field_menu"
+                  name="Fields"
+                  parent="ebi_menu"
+                  sequence="0"
+                action="ebi.ebi_field_action"
+                  groups="base.group_system"/>
+</odoo>

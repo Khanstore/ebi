@@ -16,7 +16,7 @@
                   parent="ebi_menu"
                   sequence="0"
                 action="ebi.ebi_database_action"
-                  groups="base.group_system"/>
+                  />
     <menuitem id="ebi_model_menu"
                   name="Models"
                   parent="ebi_menu"

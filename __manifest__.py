@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+
+
+
 {
     'name': "Eagle Data Import 2025",
 
@@ -26,8 +29,8 @@
         'security/ir.model.access.csv',
         # 'views/import_views.xml',
         'views/ebi.xml',
-        # 'views/menu.xml',
-        # 'data/product.category.csv',
+        'views/actions.xml',
+        'views/menu.xml',
 
 
     ],

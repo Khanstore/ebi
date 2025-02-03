@@ -97,6 +97,8 @@ class ebiModel(models.Model):
 
     def import_table_data(self):
         self.database_id.import_model_data(self.id)
+    def import_table_data_with_related(self):
+        self.database_id.import_related_model_data(self.id)
 
 
 class ExportDatabase(models.Model):
@@ -139,6 +141,59 @@ class ExportDatabase(models.Model):
         target_cur.execute("UPDATE ir_model_data SET name = replace(name, 'bd_', 'state_bd_'),module='__export__' WHERE model='res.country.state' and name ILIKE 'bd_%'  and res_id>1410 and res_id< 1477;")
 
         target_conn.commit()
+
+    def update_all_sequences(self):
+        """Automatically updates all sequences in the PostgreSQL database."""
+        dbname=self.target_database
+        user=self.target_pg_user
+        password=self.target_pg_pass
+        host=self.target_pg_host
+        port=self.target_pg_port
+        query = """
+            DO $$ 
+            DECLARE r RECORD;
+            BEGIN
+                FOR r IN 
+                    SELECT s.schemaname, s.sequencename, col.table_name, col.column_name
+                    FROM pg_sequences s
+                    JOIN information_schema.columns col 
+                    ON col.column_default LIKE '%' || s.sequencename || '%'
+                LOOP
+                    EXECUTE format(
+                        'SELECT setval(''%s'', COALESCE((SELECT MAX(%I) FROM %I), 1), false)', 
+                        r.sequencename, r.column_name, r.table_name
+                    );
+                END LOOP;
+            END $$;
+            """
+
+        try:
+            # Connect to PostgreSQL
+            conn = psycopg2.connect(dbname=dbname, user=user, password=password, host=host, port=port)
+            cursor = conn.cursor()
+
+            # Execute sequence update query
+            cursor.execute(query)
+            conn.commit()
+            # ir attachment sequence reset
+            sql="""SELECT setval(
+                    pg_get_serial_sequence('ir_attachment', 'id'),
+                    (SELECT COALESCE(MAX(id), 1) FROM ir_attachment),
+                    false
+                );"""
+            cursor.execute(query)
+            conn.commit()
+
+            print("✅ Sequences updated successfully!")
+
+        except Exception as e:
+            print(f"❌ Error updating sequences: {e}")
+            conn.rollback()
+
+        finally:
+            cursor.close()
+            conn.close()
+
 
     def delete_previous_product_data(self):
         target_conn = self.create_connection("Target")
@@ -351,6 +406,32 @@ class ExportDatabase(models.Model):
                 f"INSERT INTO ir_model_data ({', '.join(target_fields)}) VALUES ({placeholders})", rec
             )
         target_connection.commit()
+
+    def import_related_model_data(self,model_id):
+        # Fetch the Odoo model based on the provided model_id
+        model = self.env['ebi.model'].search([('id', '=', model_id)])
+
+        imported_models=[]
+
+        # Using "with" ensures that connections close automatically when done.
+        with self.create_connection("source") as source_conn, self.create_connection("Target") as target_conn:
+            with source_conn.cursor() as source_cur, target_conn.cursor() as target_cur:
+                try:
+                    target_cur.execute(f"SELECT name, model, relation  FROM ir_model_fields WHERE model = '{model.name.replace('_','.')}' AND relation IS NOT NULL;")
+                    related_models = target_cur.fetchall()
+                    for rec in related_models:
+                        if  rec[2]not in imported_models:
+                            # todo get model id to import data
+                            model_to_import = self.env['ebi.model'].search([('target', '=', rec[2].replace('.','_'))])
+                            self.import_model_data(model_to_import.id)
+                            # mark the model imported
+                            imported_models.append(rec[2])
+
+                except Exception as e:
+                    # If any error occurs, rollback the transaction to avoid partial inserts
+                    target_conn.rollback()
+                    _logger.error(f"Error during import: {e}")
+
 
     def import_model_data(self, model_id):
         """

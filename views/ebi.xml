@@ -44,6 +44,7 @@
                                         <field name="target_pg_pass" password="True"/>
                                     </group>
                                     <button type="object" name="update_table_list" string="update_table_list" class="btn-primary"/>
+                                    <button type="object" name="update_all_sequences" string="update_all_sequences" class="btn-primary"/>
                                 </group>
                             </page>
                             <page string="Tables">
@@ -59,7 +60,7 @@
                                             <field name="source"/>
                                             <field name="target"/>
                                             <button name="import_table_data" type="object" string="import_table_data" class="btn-primary"/>
-<!--                                            <field name="field_ids" widget="many2many_tags"/>-->
+                                            <button name="import_table_data_with_related" type="object" string="import data_with_related" class="btn-primary"/>
 
                                         </tree>
                                     </field>

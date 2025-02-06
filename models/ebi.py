@@ -442,7 +442,18 @@ class ExportDatabase(models.Model):
                     target_conn.rollback()
                     _logger.error(f"Error during import: {e}")
 
+    def import_all_table(self):
+        # Apply a filter to model_ids
+        # Replace 'your_filter_condition' with your actual filtering condition
+        filtered_model_ids = [rec for rec in self.model_ids if rec.selected == True]
 
+        # Sort the filtered model_ids by sequence in ascending order
+        sorted_model_ids = sorted(filtered_model_ids, key=lambda rec: rec.sequence)
+
+        # Iterate over the sorted records
+        for rec in sorted_model_ids:
+            if rec.selected:
+                self.import_model_data(rec.id)
     def import_model_data(self, model_id):
         """
         This function imports data from a source database table to a target table based on an Odoo model configuration.

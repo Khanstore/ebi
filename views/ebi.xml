@@ -48,7 +48,9 @@
                                 </group>
                             </page>
                             <page string="Tables">
+
                                 <group>
+                                     <button type="object" name="import_all_table" string="import_all" class="btn-primary"/>
                                     <field name="model_ids" >
                                         <tree >
                                             <field name="selected" />

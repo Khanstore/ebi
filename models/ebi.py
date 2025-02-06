@@ -49,13 +49,13 @@ class ebiModel(models.Model):
 
     @api.onchange('sequence')
     def rearrenge_sequences(self):
-
-        res = self.env['ebi.model'].search([('sequence', '>', self.sequence - 1),('database_id.id', '=', self.database_id.ids[0]), ('id', "<>", self.ids[0])])
-        seq = self.sequence
-        if len(res) > 0:
-            for rec in res:
-                seq = seq + 1
-                rec.sequence = seq
+        if len(self.ids)==1 : #new record has no ids so len==0
+            res = self.env['ebi.model'].search([('sequence', '>', self.sequence - 1),('database_id.id', '=', self.database_id.ids[0]), ('id', "<>", self.ids[0])])
+            seq = self.sequence
+            if len(res) > 0:
+                for rec in res:
+                    seq = seq + 1
+                    rec.sequence = seq
 
     def update_field_list(self):
         source_conn = self.database_id.create_connection("source")
@@ -520,14 +520,17 @@ class ExportDatabase(models.Model):
                         """
                     target_cur.executemany(query, data_with_null)
 
-                    # # Reset sequence for auto-increment primary keys
-                    # target_cur.execute(
-                    #     f"SELECT setval(pg_get_serial_sequence('{target_table}', 'id'), "
-                    #     f"COALESCE((SELECT MAX(id) FROM {target_table}), 1, FALSE));"
-                    # )
-
-                    # Commit the transaction
-                    target_conn.commit()
+                    # Reset sequence for auto-increment primary keys
+                    if 'id' in target_fields:
+                        target_cur.execute(
+                            f"SELECT setval(pg_get_serial_sequence('{target_table}', 'id'), "
+                            f"COALESCE((SELECT MAX(id) FROM {target_table}), 1, 1));"
+                        )
+                        # reset external Ids
+                        self.reset_external_id( source_table, target_table, source_cur, target_cur,
+                                          target_conn)
+                        # Commit the transaction
+                        target_conn.commit()
 
                 except Exception as e:
                     # If any error occurs, rollback the transaction to avoid partial inserts

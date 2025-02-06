@@ -4,7 +4,7 @@ import csv,psycopg2
 import io
 import base64
 import xmlrpc.client
-from odoo import models, fields
+from odoo import models, fields,api
 import os,pandas as pd
 import json
 import numpy as np
@@ -34,7 +34,7 @@ class ebiFields(models.Model):
 class ebiModel(models.Model):
     _name = 'ebi.model'
     _description = 'Models to import'
-
+    _order="selected desc, sequence"
     name = fields.Char("Name")
     instruction=fields.Char("Instruction")
     no_id=fields.Boolean("ID present?")
@@ -46,6 +46,16 @@ class ebiModel(models.Model):
     # fixme apply this domain, domain="[('model_id', '=', model_id)]")
     field_ids = fields.One2many('ebi.fields','model_id', string='Fields')
     # _sql_constraints = [("db_model_unique", "unique(name,db_id)", "model name per database be unique!")]
+
+    @api.onchange('sequence')
+    def rearrenge_sequences(self):
+
+        res = self.env['ebi.model'].search([('sequence', '>', self.sequence - 1),('database_id.id', '=', self.database_id.ids[0]), ('id', "<>", self.ids[0])])
+        seq = self.sequence
+        if len(res) > 0:
+            for rec in res:
+                seq = seq + 1
+                rec.sequence = seq
 
     def update_field_list(self):
         source_conn = self.database_id.create_connection("source")
